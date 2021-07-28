@@ -27,7 +27,7 @@ class SACAgent:
         self.critic_target2 = Network(input_dimension=self.state_dim,
                                       output_dimension=self.action_dim)
 
-        self.update_target_networks()
+        self.soft_update_target_networks(tau=1.)
 
         self.actor_local = Network(
             input_dimension=self.state_dim,
@@ -81,6 +81,8 @@ class SACAgent:
             actor_loss.backward()
             self.actor_optimiser.step()
 
+            self.soft_update_target_networks()
+
     def critic_loss(self, states_tensor, actions_tensor, rewards_tensor, next_states_tensor, done_tensor):
         with torch.no_grad():
             action_probabilities, log_action_probabilities = self.get_action_info(next_states_tensor)
@@ -127,9 +129,13 @@ class SACAgent:
         action_probabilities = self.actor_local.forward(state_tensor)
         return action_probabilities.squeeze(0).detach().numpy()
 
-    def update_target_networks(self):
-        self.critic_target.load_state_dict(self.critic_local.state_dict())
-        self.critic_target2.load_state_dict(self.critic_local2.state_dict())
+    def soft_update_target_networks(self, tau=0.04):
+        self.soft_update(self.critic_target, self.critic_local, tau)
+        self.soft_update(self.critic_target2, self.critic_local2, tau)
+
+    def soft_update(self, target_model, origin_model, tau):
+        for target_param, local_param in zip(target_model.parameters(), origin_model.parameters()):
+            target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
 
     def predict_q_values(self, state):
         q_values = self.critic_local(state)
