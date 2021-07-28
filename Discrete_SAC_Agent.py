@@ -10,34 +10,37 @@ class SACAgent:
     ALPHA = 0.1
     BATCH_SIZE = 100
     DISCOUNT_RATE = 0.9
-    NUM_ACTIONS = 4
 
-    UP = 0
-    RIGHT = 1
-    DOWN = 2
-    LEFT = 3
-
-    def __init__(self):
-        self.critic_local = Network(input_dimension=2, output_dimension=4)
-        self.critic_local2 = Network(input_dimension=2, output_dimension=4)
+    def __init__(self, environment):
+        self.environment = environment
+        self.state_dim = self.environment.observation_space.shape[0]
+        self.action_dim = self.environment.action_space.n
+        self.critic_local = Network(input_dimension=self.state_dim,
+                                    output_dimension=self.action_dim)
+        self.critic_local2 = Network(input_dimension=self.state_dim,
+                                     output_dimension=self.action_dim)
         self.critic_optimiser = torch.optim.Adam(self.critic_local.parameters(), lr=0.001)
         self.critic_optimiser2 = torch.optim.Adam(self.critic_local2.parameters(), lr=0.001)
 
-        self.critic_target = Network(input_dimension=2, output_dimension=4)
-        self.critic_target2 = Network(input_dimension=2, output_dimension=4)
+        self.critic_target = Network(input_dimension=self.state_dim,
+                                     output_dimension=self.action_dim)
+        self.critic_target2 = Network(input_dimension=self.state_dim,
+                                      output_dimension=self.action_dim)
 
         self.update_target_networks()
 
         self.actor_local = Network(
-            input_dimension=2, output_dimension=4, output_activation=torch.nn.Softmax(dim=1)
+            input_dimension=self.state_dim,
+            output_dimension=self.action_dim,
+            output_activation=torch.nn.Softmax(dim=1)
         )
         self.actor_optimiser = torch.optim.Adam(self.actor_local.parameters(), lr=0.001)
 
-        self.replay_buffer = ReplayBuffer()
+        self.replay_buffer = ReplayBuffer(self.environment)
 
     def get_next_action(self, state):
         action_probabilities = self.get_action_probabilities(state)
-        discrete_action = np.random.choice(range(self.NUM_ACTIONS), p=action_probabilities)
+        discrete_action = np.random.choice(range(self.action_dim), p=action_probabilities)
         return discrete_action
 
     def train_on_transition(self, state, discrete_action, next_state, reward):
@@ -122,14 +125,6 @@ class SACAgent:
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
         action_probabilities = self.actor_local.forward(state_tensor)
         return action_probabilities.squeeze(0).detach().numpy()
-
-    def discrete_to_continuous_action(self, discrete_action):
-        return {
-            self.UP: np.array([0, 0.01], dtype=np.float32),
-            self.RIGHT: np.array([0.01, 0], dtype=np.float32),
-            self.DOWN: np.array([0, -0.01], dtype=np.float32),
-            self.LEFT: np.array([-0.01, 0], dtype=np.float32)
-        }[discrete_action]
 
     def update_target_networks(self):
         self.critic_target.load_state_dict(self.critic_local.state_dict())
