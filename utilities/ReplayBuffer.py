@@ -23,8 +23,8 @@ class ReplayBuffer:
         action_type_str = environment.action_space.sample().__class__.__name__
 
         # type str for transition = 'state type, action type, reward type, state type'
-        transition_type_str = '{0}{1}, {2}{3}, float32, {0}{1}'.format(state_dim_str, state_type_str, action_dim_str,
-                                                                  action_type_str)
+        transition_type_str = '{0}{1}, {2}{3}, float32, {0}{1}, bool'.format(state_dim_str, state_type_str,
+                                                                             action_dim_str, action_type_str)
 
         return transition_type_str
 

@@ -7,10 +7,10 @@ if __name__ == "__main__":
     env = gym.make("CartPole-v1")
     agent = SACAgent(env)
     state = env.reset()
-    for _ in range(50000):
+    for _ in range(5000):
         action = agent.get_next_action(state)
         next_state, reward, done, info = env.step(action)
-        agent.train_on_transition(state, action, next_state, reward)
+        agent.train_on_transition(state, action, next_state, reward, done)
         state = next_state
         if done:
             state = env.reset()
