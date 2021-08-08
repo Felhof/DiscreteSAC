@@ -7,7 +7,7 @@ from utilities.ReplayBuffer import ReplayBuffer
 
 class SACAgent:
 
-    ALPHA = 0.1
+    ALPHA_INITIAL = 1.
     BATCH_SIZE = 100
     DISCOUNT_RATE = 0.99
 
@@ -38,6 +38,11 @@ class SACAgent:
 
         self.replay_buffer = ReplayBuffer(self.environment)
 
+        self.target_entropy = -torch.prod(torch.tensor(self.environment.action_space.shape)).item()
+        self.log_alpha = torch.tensor(np.log(self.ALPHA_INITIAL), requires_grad=True)
+        self.alpha = self.log_alpha
+        self.alpha_optimiser = torch.optim.Adam([self.log_alpha], lr=0.001)
+
     def get_next_action(self, state):
         action_probabilities = self.get_action_probabilities(state)
         discrete_action = np.random.choice(range(self.action_dim), p=action_probabilities)
@@ -48,10 +53,11 @@ class SACAgent:
         self.train_networks(transition)
 
     def train_networks(self, transition):
-        # Set all the gradients stored in the optimiser to zero.
+        # Set all the gradients stored in the optimisers to zero.
         self.critic_optimiser.zero_grad()
         self.critic_optimiser2.zero_grad()
         self.actor_optimiser.zero_grad()
+        self.alpha_optimiser.zero_grad()
         # Calculate the loss for this transition.
         self.replay_buffer.add_transition(transition)
         # Compute the gradients based on this loss, i.e. the gradients of the loss with respect to the Q-network
@@ -76,10 +82,16 @@ class SACAgent:
             self.critic_optimiser.step()
             self.critic_optimiser2.step()
 
-            actor_loss = self.actor_loss(states_tensor)
+            actor_loss, log_action_probabilities = self.actor_loss(states_tensor)
 
             actor_loss.backward()
             self.actor_optimiser.step()
+
+            alpha_loss = self.temperature_loss(log_action_probabilities)
+
+            alpha_loss.backwards()
+            self.alpha_optimiser.step()
+            self.alpha = self.log_alpha.exp()
 
             self.soft_update_target_networks()
 
@@ -89,7 +101,7 @@ class SACAgent:
             next_q_values_target = self.critic_target.forward(next_states_tensor)
             next_q_values_target2 = self.critic_target2.forward(next_states_tensor)
             soft_state_values = (action_probabilities * (
-                    torch.min(next_q_values_target, next_q_values_target2) - self.ALPHA * log_action_probabilities
+                    torch.min(next_q_values_target, next_q_values_target2) - self.alpha * log_action_probabilities
             )).sum(dim=1)
 
             next_q_values = rewards_tensor + ~done_tensor * self.DISCOUNT_RATE*soft_state_values
@@ -108,9 +120,13 @@ class SACAgent:
         action_probabilities, log_action_probabilities = self.get_action_info(states_tensor)
         q_values_local = self.critic_local(states_tensor)
         q_values_local2 = self.critic_local2(states_tensor)
-        inside_term = self.ALPHA * log_action_probabilities - torch.min(q_values_local, q_values_local2)
+        inside_term = self.alpha * log_action_probabilities - torch.min(q_values_local, q_values_local2)
         policy_loss = (action_probabilities * inside_term).sum(dim=1).mean()
-        return policy_loss
+        return policy_loss, log_action_probabilities
+
+    def temperature_loss(self, log_action_probabilities):
+        alpha_loss = -(self.log_alpha * (log_action_probabilities + self.target_entropy).detach()).mean()
+        return alpha_loss
 
     def get_action_info(self, states_tensor):
         action_probabilities = self.actor_local.forward(states_tensor)
