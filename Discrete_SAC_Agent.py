@@ -43,10 +43,23 @@ class SACAgent:
         self.alpha = self.log_alpha
         self.alpha_optimiser = torch.optim.Adam([self.log_alpha], lr=0.001)
 
-    def get_next_action(self, state):
+    def get_next_action(self, state, evaluation_episode=False):
+        if evaluation_episode:
+            discrete_action = self.get_action_deterministically(state)
+        else:
+            discrete_action = self.get_action_nondeterministically(state)
+        return discrete_action
+
+    def get_action_nondeterministically(self, state):
         action_probabilities = self.get_action_probabilities(state)
         discrete_action = np.random.choice(range(self.action_dim), p=action_probabilities)
         return discrete_action
+
+    def get_action_deterministically(self, state):
+        action_probabilities = self.get_action_probabilities(state)
+        discrete_action = np.argmax(action_probabilities)
+        return discrete_action
+
 
     def train_on_transition(self, state, discrete_action, next_state, reward, done):
         transition = (state, discrete_action, reward, next_state, done)
@@ -89,7 +102,7 @@ class SACAgent:
 
             alpha_loss = self.temperature_loss(log_action_probabilities)
 
-            alpha_loss.backwards()
+            alpha_loss.backward()
             self.alpha_optimiser.step()
             self.alpha = self.log_alpha.exp()
 
@@ -134,11 +147,6 @@ class SACAgent:
         z = z.float() * 1e-8
         log_action_probabilities = torch.log(action_probabilities + z)
         return action_probabilities, log_action_probabilities
-
-    def predict(self, state):
-        action_probabilities = self.get_action_probabilities(state)
-        discrete_action = np.argmax(action_probabilities)
-        return discrete_action
 
     def get_action_probabilities(self, state):
         state_tensor = torch.tensor(state, dtype=torch.float32).unsqueeze(0)
