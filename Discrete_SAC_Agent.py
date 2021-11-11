@@ -81,11 +81,11 @@ class SACAgent:
             minibatch_separated = list(map(list, zip(*minibatch)))
 
             # unravel transitions to get states, actions, rewards and next states
-            states_tensor = torch.tensor(minibatch_separated[0])
-            actions_tensor = torch.tensor(minibatch_separated[1])
-            rewards_tensor = torch.tensor(minibatch_separated[2]).float()
-            next_states_tensor = torch.tensor(minibatch_separated[3])
-            done_tensor = torch.tensor(minibatch_separated[4])
+            states_tensor = torch.tensor(np.array(minibatch_separated[0]))
+            actions_tensor = torch.tensor(np.array(minibatch_separated[1]))
+            rewards_tensor = torch.tensor(np.array(minibatch_separated[2])).float()
+            next_states_tensor = torch.tensor(np.array(minibatch_separated[3]))
+            done_tensor = torch.tensor(np.array(minibatch_separated[4]))
 
             critic_loss, critic2_loss = \
                 self.critic_loss(states_tensor, actions_tensor, rewards_tensor, next_states_tensor, done_tensor)
