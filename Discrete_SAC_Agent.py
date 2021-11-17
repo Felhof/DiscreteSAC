@@ -8,8 +8,10 @@ from utilities.ReplayBuffer import ReplayBuffer
 class SACAgent:
 
     ALPHA_INITIAL = 1.
-    BATCH_SIZE = 100
+    REPLAY_BUFFER_BATCH_SIZE = 100
     DISCOUNT_RATE = 0.99
+    LEARNING_RATE = 10 ** -4
+    SOFT_UPDATE_INTERPOLATION_FACTOR = 0.01
 
     def __init__(self, environment):
         self.environment = environment
@@ -19,8 +21,8 @@ class SACAgent:
                                     output_dimension=self.action_dim)
         self.critic_local2 = Network(input_dimension=self.state_dim,
                                      output_dimension=self.action_dim)
-        self.critic_optimiser = torch.optim.Adam(self.critic_local.parameters(), lr=0.001)
-        self.critic_optimiser2 = torch.optim.Adam(self.critic_local2.parameters(), lr=0.001)
+        self.critic_optimiser = torch.optim.Adam(self.critic_local.parameters(), lr=self.LEARNING_RATE)
+        self.critic_optimiser2 = torch.optim.Adam(self.critic_local2.parameters(), lr=self.LEARNING_RATE)
 
         self.critic_target = Network(input_dimension=self.state_dim,
                                      output_dimension=self.action_dim)
@@ -34,14 +36,14 @@ class SACAgent:
             output_dimension=self.action_dim,
             output_activation=torch.nn.Softmax(dim=1)
         )
-        self.actor_optimiser = torch.optim.Adam(self.actor_local.parameters(), lr=0.001)
+        self.actor_optimiser = torch.optim.Adam(self.actor_local.parameters(), lr=self.LEARNING_RATE)
 
         self.replay_buffer = ReplayBuffer(self.environment)
 
-        self.target_entropy = -torch.prod(torch.tensor(self.environment.action_space.shape)).item()
+        self.target_entropy = 0.98 * -np.log(1 / self.environment.action_space.n)
         self.log_alpha = torch.tensor(np.log(self.ALPHA_INITIAL), requires_grad=True)
         self.alpha = self.log_alpha
-        self.alpha_optimiser = torch.optim.Adam([self.log_alpha], lr=0.001)
+        self.alpha_optimiser = torch.optim.Adam([self.log_alpha], lr=self.LEARNING_RATE)
 
     def get_next_action(self, state, evaluation_episode=False):
         if evaluation_episode:
@@ -75,9 +77,9 @@ class SACAgent:
         self.replay_buffer.add_transition(transition)
         # Compute the gradients based on this loss, i.e. the gradients of the loss with respect to the Q-network
         # parameters.
-        if self.replay_buffer.get_size() >= self.BATCH_SIZE:
+        if self.replay_buffer.get_size() >= self.REPLAY_BUFFER_BATCH_SIZE:
             # get minibatch of 100 transitions from replay buffer
-            minibatch = self.replay_buffer.sample_minibatch(self.BATCH_SIZE)
+            minibatch = self.replay_buffer.sample_minibatch(self.REPLAY_BUFFER_BATCH_SIZE)
             minibatch_separated = list(map(list, zip(*minibatch)))
 
             # unravel transitions to get states, actions, rewards and next states
@@ -153,13 +155,13 @@ class SACAgent:
         action_probabilities = self.actor_local.forward(state_tensor)
         return action_probabilities.squeeze(0).detach().numpy()
 
-    def soft_update_target_networks(self, tau=0.04):
+    def soft_update_target_networks(self, tau=SOFT_UPDATE_INTERPOLATION_FACTOR):
         self.soft_update(self.critic_target, self.critic_local, tau)
         self.soft_update(self.critic_target2, self.critic_local2, tau)
 
     def soft_update(self, target_model, origin_model, tau):
         for target_param, local_param in zip(target_model.parameters(), origin_model.parameters()):
-            target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
+            target_param.data.copy_(tau * local_param.data + (1 - tau) * target_param.data)
 
     def predict_q_values(self, state):
         q_values = self.critic_local(state)

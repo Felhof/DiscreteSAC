@@ -4,18 +4,19 @@ import matplotlib.pyplot as plt
 
 from Discrete_SAC_Agent import SACAgent
 
-TRAINING_EVALUATION_RATIO = 10
+TRAINING_EVALUATION_RATIO = 4
 RUNS = 5
-EPISODES_PER_RUN = 401
+EPISODES_PER_RUN = 400
 STEPS_PER_EPISODE = 200
 
 if __name__ == "__main__":
     env = gym.make("CartPole-v1")
     agent_results = []
-    for _ in range(RUNS):
+    for run in range(RUNS):
         agent = SACAgent(env)
         run_results = []
         for episode_number in range(EPISODES_PER_RUN):
+            print('\r', f'Run: {run + 1}/{RUNS} | Episode: {episode_number + 1}/{EPISODES_PER_RUN}', end=' ')
             evaluation_episode = episode_number % TRAINING_EVALUATION_RATIO == 0
             episode_reward = 0
             state = env.reset()
@@ -43,13 +44,13 @@ if __name__ == "__main__":
     mean_minus_std = [m - s for m, s in zip(results_mean, results_std)]
 
     x_vals = list(range(len(results_mean)))
-    x_vals = [x_val * 10 for x_val in x_vals]
+    x_vals = [x_val * (TRAINING_EVALUATION_RATIO - 1) for x_val in x_vals]
 
     ax = plt.gca()
     ax.set_ylim([0, 200])
-    ax.set_ylabel('Episode Scores')
-    ax.set_xlabel('Episode Number')
-    ax.plot(x_vals, results_mean, label='Discrete SAC', color='blue')
+    ax.set_ylabel('Episode Score')
+    ax.set_xlabel('Training Episode')
+    ax.plot(x_vals, results_mean, label='Average Result', color='blue')
     ax.plot(x_vals, mean_plus_std, color='blue', alpha=0.1)
     ax.plot(x_vals, mean_minus_std, color='blue', alpha=0.1)
     ax.fill_between(x_vals, y1=mean_minus_std, y2=mean_plus_std, alpha=0.1, color='blue')
